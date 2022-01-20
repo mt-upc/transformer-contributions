@@ -25,15 +25,27 @@ import matplotlib
 
 from captum.attr import visualization
 
+try:
+    from IPython.core.display import HTML, display
+
+    HAS_IPYTHON = True
+except ImportError:
+    HAS_IPYTHON = False
+
+color_name = 'color{}'
+define_color = '\definecolor{{{}}}{{HTML}}{{{}}}'
+box = '\\mybox{{{}}}{{\strut{{{}}}}}'
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 
 def load_model_data(model_name,dataset_name=None):
+    """Load model and datasets."""
 
     print('Loading',model_name,'...')
     print('Loading',dataset_name,'...')
-    
+
     if dataset_name == 'sst2':
         dataset = load_dataset('glue', 'sst2',split='test')
         if model_name == 'bert':
@@ -45,6 +57,9 @@ def load_model_data(model_name,dataset_name=None):
         elif model_name == 'roberta':
             tokenizer = AutoTokenizer.from_pretrained("textattack/roberta-base-SST-2")
             model = AutoModelForSequenceClassification.from_pretrained("textattack/roberta-base-SST-2")
+        else:
+            print('please select bert, distilbert or roberta')
+            return -1
 
     elif dataset_name == 'imdb':
         dataset = load_dataset("imdb",split='test')
@@ -58,6 +73,7 @@ def load_model_data(model_name,dataset_name=None):
             tokenizer = AutoTokenizer.from_pretrained("textattack/roberta-base-imdb")
             model = AutoModelForSequenceClassification.from_pretrained("textattack/roberta-base-imdb")
     else:
+        print('No dataset provided, loading pre-trained models and no dataset')
         if model_name == 'bert':
             tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
             model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
@@ -69,6 +85,9 @@ def load_model_data(model_name,dataset_name=None):
         elif model_name == 'roberta':
             tokenizer = AutoTokenizer.from_pretrained("roberta-base")
             model = AutoModelForMaskedLM.from_pretrained("roberta-base")
+        else:
+            print('please select bert, distilbert or roberta')
+            return -1
         dataset = None
 
     model.to(device)
@@ -77,6 +96,9 @@ def load_model_data(model_name,dataset_name=None):
 
 
 def get_cos_mean(model_name,dataset_name,num_samples = 500):
+    """Compute the average cosine similarity between random samples of token representations
+        and of transformer vectors."""
+
     model, tokenizer, dataset_partition = load_model_data(model_name,dataset_name)
     try:
         num_layers = model.config.num_hidden_layers
@@ -93,7 +115,7 @@ def get_cos_mean(model_name,dataset_name,num_samples = 500):
 
     if dataset_name == 'linzen':
         out_fn = f'cos_results/{model_name}_linzen_cos_results.json'   
-        for i,line in enumerate(open("lgd_dataset.tsv",encoding="utf8")):
+        for i,line in enumerate(open("data/lgd_dataset.tsv",encoding="utf8")):
             na,_,masked,good,bad = line.strip().split("\t")
             if i == num_samples:
                 break
@@ -155,26 +177,33 @@ def get_cos_mean(model_name,dataset_name,num_samples = 500):
             }, f)
 
 def normalize_attribution_visualization(attributions):
+    """Applies min-max normalization for visualization purposes."""
+
     min_importance_matrix = attributions.min(0, keepdim=True)[0]
     max_importance_matrix = attributions.max(0, keepdim=True)[0]
     attributions = (attributions - min_importance_matrix) / (max_importance_matrix - min_importance_matrix)
     return attributions
 
 def normalize_contributions(model_contributions,scaling='minmax'):
+    """Normalization for the matrix of contributions/weights extracted from the model."""
+
     normalized_model_contributions = torch.zeros(model_contributions.size())
     for l in range(0,model_contributions.size(0)):
+
         if scaling == 'min_max':
             ## Min-max normalization
             min_importance_matrix = model_contributions[l].min(1, keepdim=True)[0]
             max_importance_matrix = model_contributions[l].max(1, keepdim=True)[0]
             normalized_model_contributions[l] = (model_contributions[l] - min_importance_matrix) / (max_importance_matrix - min_importance_matrix)
             normalized_model_contributions[l] = normalized_model_contributions[l] / normalized_model_contributions[l].sum(dim=-1,keepdim=True)
+
         elif scaling == 'sum_one':
             normalized_model_contributions[l] = model_contributions[l] / model_contributions[l].sum(dim=-1,keepdim=True)
             #normalized_model_contributions[l] = normalized_model_contributions[l].clamp(min=0)
+
+        # For l1 distance between resultant and transformer vectors we apply min_sum
         elif scaling == 'min_sum':
             min_importance_matrix = model_contributions[l].min(1, keepdim=True)[0]
-            # max_importance_matrix = model_contributions[l].max(1, keepdim=True)[0]
             normalized_model_contributions[l] = model_contributions[l] + torch.abs(min_importance_matrix)
             normalized_model_contributions[l] = normalized_model_contributions[l] / normalized_model_contributions[l].sum(dim=-1,keepdim=True)
         else:
@@ -182,6 +211,8 @@ def normalize_contributions(model_contributions,scaling='minmax'):
     return normalized_model_contributions
 
 def plot_histogram(input_tensor,text):
+    """Helper function to make bar plots."""
+
     input_tensor = input_tensor.cpu().detach().numpy()
     # Creating plot
     fig = plt.figure(figsize =(20,4))
@@ -191,11 +222,12 @@ def plot_histogram(input_tensor,text):
 
 def get_raw_att_relevance(full_att_mat, layer=-1,token_pos=0):
     att_sum_heads =  full_att_mat.sum(axis=1)/full_att_mat.shape[1]
-    #return att_sum_heads[layer].max(axis=0)
     return att_sum_heads[layer][token_pos,:]
 
 def spearmanr(x, y):
-    """ `x`, `y` --> pd.Series"""
+    """Compute Spearman rank's correlation bertween two attribution vectors.
+        https://github.com/samiraabnar/attention_flow/blob/master/compute_corel_distilbert_sst.py"""
+
     x = pd.Series(x)
     y = pd.Series(y)
     assert x.shape == y.shape
@@ -207,10 +239,16 @@ def spearmanr(x, y):
     coef = 1. - (6. * dsq) / (n * (n**2 - 1.))
     return [coef]
 
-def add_attributions_to_visualizer(attributions, tokens, pred, pred_ind, label, delta, vis_data_records):
-
-    #attributions = attributions.cpu().detach().numpy()
+def get_normalized_rank(x):
+    """Compute normalized [0,1] ranks. The higher the value, the higher the rank."""
     
+    length_tok_sentence = x.shape
+    x = pd.Series(x)
+    rank = x.rank(method='dense')
+    rank_normalized = rank/length_tok_sentence
+    return rank_normalized
+
+def add_attributions_to_visualizer(attributions, tokens, pred, pred_ind, label, delta, vis_data_records):    
     # storing couple samples in an array for visualization purposes
     vis_data_records.append(visualization.VisualizationDataRecord(
                             attributions,
@@ -221,13 +259,7 @@ def add_attributions_to_visualizer(attributions, tokens, pred, pred_ind, label, 
                             attributions.sum(),       
                             tokens[:len(attributions)],
                             delta))
-                            
-try:
-    from IPython.core.display import HTML, display
-
-    HAS_IPYTHON = True
-except ImportError:
-    HAS_IPYTHON = False
+                        
 
 def format_special_tokens(token):
     if token.startswith("<") and token.endswith(">"):
@@ -264,11 +296,10 @@ def format_word_importances(words, importances):
     tags.append("</td>")
     return "".join(tags)
 
-color_name = 'color{}'
-define_color = '\definecolor{{{}}}{{HTML}}{{{}}}'
-box = '\\mybox{{{}}}{{\strut{{{}}}}}'
 
 def latex_colorize(text, weights):
+    """https://github.com/ucinlp/facade/blob/facade/util/generate_colorize.py"""
+
     s = ''
     for w, x in zip(text, weights):
         color = np.digitize(x, np.arange(0, 1, 0.2)) - 1
@@ -276,6 +307,8 @@ def latex_colorize(text, weights):
     return s
 
 def prepare_colorize():
+    """ Define scale of colors for macros.tex."""
+
     with open('latex_saliency/colorize.tex', 'w') as f:
         cmap = plt.cm.get_cmap('Blues')
         for i, x in enumerate(np.arange(0, 1, 0.2)):
@@ -290,8 +323,11 @@ def prepare_colorize():
 
 
 def figure_saliency(attributions_list,tokenized_text):
+    """ Creates rows of paper's tables by adding the corresponding color to the text."""
+
     words_weights = []
     for attr in attributions_list:
+        # We need to replace RoBERTa's special character
         words_weights.append((tokenized_text[i].replace('\u0120',''), element.item()) for i, element in enumerate(attr))
     
     
@@ -301,25 +337,10 @@ def figure_saliency(attributions_list,tokenized_text):
             #words.replace('\u0120','')
             f.write(latex_colorize(words, weights)+'\\\\\n')
 
-# def compute_abnar_joint_attention(att_mat, add_residual=True):
-#     if add_residual:
-#         residual_att = np.eye(att_mat.shape[1])[None,...]
-#         aug_att_mat = att_mat + residual_att
-#         aug_att_mat = aug_att_mat / aug_att_mat.sum(axis=-1)[...,None]
-#     else:
-#        aug_att_mat =  att_mat
-    
-#     joint_attentions = np.zeros(aug_att_mat.shape)
-
-#     layers = joint_attentions.shape[0]
-#     joint_attentions[0] = aug_att_mat[0]
-#     for i in np.arange(1,layers):
-#         joint_attentions[i] = aug_att_mat[i].dot(joint_attentions[i-1])
-        
-#     return joint_attentions
-
 
 def compute_joint_attention(att_mat):
+    """ Define scale of colors for macros.tex."""
+
     aug_att_mat =  att_mat
     device = att_mat.device
     joint_attentions = torch.zeros(aug_att_mat.size()).to(device)
@@ -337,17 +358,13 @@ def compute_joint_attention(att_mat):
 
 
 def compute_rollout(att_mat):
+    """ Compute rollout method for raw attention weights."""
+
     # Add residual connection
     res_att_mat = att_mat + np.eye(att_mat.shape[1])[None,...]
+    # Normalize to sum 1
     res_att_mat = res_att_mat / res_att_mat.sum(axis=-1)[...,None]
     res_att_mat_torch = torch.tensor(res_att_mat,dtype=torch.float32)
     joint_attentions = compute_joint_attention(res_att_mat_torch) # (num_layers,src_len,src_len)
     return joint_attentions
-
-def get_normalized_rank(x):
-    length_tok_sentence = x.shape
-    x = pd.Series(x)
-    rank = x.rank(method='dense')
-    rank_normalized = rank/length_tok_sentence
-    return rank_normalized
 
