@@ -339,7 +339,7 @@ def figure_saliency(attributions_list,tokenized_text):
 
 
 def compute_joint_attention(att_mat):
-    """ Define scale of colors for macros.tex."""
+    """ Compute attention rollout given contributions or attn weights + residual."""
 
     aug_att_mat =  att_mat
     device = att_mat.device
