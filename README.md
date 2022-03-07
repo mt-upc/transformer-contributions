@@ -6,9 +6,9 @@ The Transformer architecture aggregates input information through the attention 
 </em>
 
 ## Installation
-Clone this repostitory to $CONTRIB_ROOT:
+Clone this repostitory to `$CONTRIB_ROOT`:
 ```bash
-!git clone https://github.com/javiferran/transformer_contributions.git $CONTRIB_ROOT
+!git clone https://github.com/javiferran/transformer_contributions.git ${CONTRIB_ROOT}
 
 pip install -r ${CONTRIB_ROOT}/requirements.txt
 ```
