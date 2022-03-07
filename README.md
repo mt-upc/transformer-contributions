@@ -27,8 +27,9 @@ We compare our method with:
 We use [Captum](https://captum.ai/) implementation of gradient-based methods.
 
 ### Text Classification
-To get correlations between different interpretability methods (Table 2), and special tokens ranks (Figure 6) run:
-```baspython $CONTRIB_ROOT/src/correlations.py \
+To get correlations between different interpretability methods (Table 2), and special tokens ranks (Figure 6):
+```bash
+python ${CONTRIB_ROOT}/correlations.py \
   -model bert \         # model: bert/distilbert/roberta
   -dataset sst2 \       # dataset to use: sst2/sva
   -samples 500 \        # number of samples
