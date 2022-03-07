@@ -55,6 +55,8 @@ class ModelWrapper(nn.Module):
         model_importance_list = []
         transformed_vectors_norm_list = []
         transformed_vectors_list = []
+        resultants_list = []
+        contributions_data = {}
 
         try:
             num_layers = self.model.config.n_layers
@@ -129,7 +131,7 @@ class ModelWrapper(nn.Module):
             # V2 (add)
             # print(transformed_vectors.size())
             # print('var_pre_ln',var_pre_ln.size())
-            transformed_vectors = transformed_vectors/((var_pre_ln.unsqueeze(-1) + ln_eps)**(1/2))
+            #transformed_vectors = transformed_vectors/(var_pre_ln.unsqueeze(-1) + ln_eps)**(1/2)
 
             transformed_vectors_norm = torch.norm(transformed_vectors, dim=-1) # (batch, seq_len, seq_len)
 
@@ -140,27 +142,36 @@ class ModelWrapper(nn.Module):
             #resultant = (attn_output + dense_bias_term)/((var_pre_ln + ln_eps)**(1/2)) + ln_bias
 
             # V2
-            dense_bias_term = dense_bias_term/((var_pre_ln + ln_eps)**(1/2))
+            #dense_bias_term = dense_bias_term/((var_pre_ln + ln_eps)**(1/2))
+
             # print('attn_output',attn_output.size())
             # print('dense_bias_term',dense_bias_term.size())
             # print('ln_bias',ln_bias.size())
-            resultant = attn_output + dense_bias_term + ln_bias
+            resultant = (attn_output + dense_bias_term)/((var_pre_ln + ln_eps)**(1/2)) + ln_bias
             #print('resultant',resultant)
 
             #print('actual output', func_outputs[self.model.config.model_type +'.encoder.layer.' + str(layer) + '.attention.output.LayerNorm'][0])
 
             ## FINAL
             importance_matrix = -F.pairwise_distance(transformed_vectors, resultant.unsqueeze(2),p=1)
-            #importance_matrix = 1/(F.pairwise_distance(transformed_vectors, resultant.unsqueeze(2),p=1))
             
             model_importance_list.append(torch.squeeze(importance_matrix))
             transformed_vectors_norm_list.append(torch.squeeze(transformed_vectors_norm))
             transformed_vectors_list.append(torch.squeeze(transformed_vectors))
+            resultants_list.append(torch.squeeze(resultant))
         contributions_model = torch.stack(model_importance_list)
         transformed_vectors_norm_model = torch.stack(transformed_vectors_norm_list)
         transformed_vectors_model = torch.stack(transformed_vectors_list)
+        resultants_model = torch.stack(resultants_list)
 
-        return contributions_model, transformed_vectors_norm_model, transformed_vectors_model
+        contributions_data['contributions'] = contributions_model
+        contributions_data['transformed_vectors'] = transformed_vectors_model
+        contributions_data['transformed_vectors_norm'] = transformed_vectors_norm_model
+        contributions_data['resultants'] = resultants_model
+
+
+        #return contributions_model, transformed_vectors_norm_model, transformed_vectors_model
+        return contributions_data
 
     def get_prediction(self, input_model):
         with torch.no_grad():
@@ -172,10 +183,12 @@ class ModelWrapper(nn.Module):
         with torch.no_grad():
             prediction_scores, hidden_states, attentions = self.model(**input_model, output_hidden_states=True, output_attentions=True)
             
-            contributions_model, transformed_vectors_norm_model, transformed_vectors_model = self.get_contributions(hidden_states, attentions, self.func_inputs, self.func_outputs)
+            #contributions_model, transformed_vectors_norm_model, transformed_vectors_model = self.get_contributions(hidden_states, attentions, self.func_inputs, self.func_outputs)
+            contributions_data = self.get_contributions(hidden_states, attentions, self.func_inputs, self.func_outputs)
             # Clean forward_hooks dictionaries
             self.clean_hooks()
-            return prediction_scores, hidden_states, attentions, transformed_vectors_norm_model, contributions_model, transformed_vectors_model
+            #return prediction_scores, hidden_states, attentions, transformed_vectors_norm_model, contributions_model, transformed_vectors_model
+            return prediction_scores, hidden_states, attentions, contributions_data
 
 
 class ClassificationModelWrapperCaptum(nn.Module):

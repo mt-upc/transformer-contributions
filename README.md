@@ -1,14 +1,16 @@
 # Measuring the Mixing of Contextual Information in the Transformer
 
+## Abstract
+<em>
+The Transformer architecture aggregates input information through the attention mechanism, but there is no clear understanding of how this information is mixed across the entire model. Recent works have demonstrated that attention weights alone are not enough to describe the flow of information. In this paper, we consider the whole attention block --multi-head attention, residual connection and layer normalization-- and define a metric to measure token-to-token interactions within each layer, considering the characteristics of the representation space. Then, we aggregate the layer-wise interpretations to provide input attribution scores for model predictions. Experimentally, we show that our method provides faithful explanations and outperforms similar aggregation methods.
+</em>
+
 ## Installation
-
+Clone this repostitory to $CONTRIB_ROOT:
 ```bash
-!git clone https://github.com/javiferran/transformer_contributions.git
+!git clone https://github.com/javiferran/transformer_contributions.git $CONTRIB_ROOT
 
-import os
-os.chdir(f'./transformer_contributions')
-
-!pip install -r requirements.txt
+pip install -r ${CONTRIB_ROOT}/requirements.txt
 ```
 
 ## Usage with Transformers
@@ -23,11 +25,21 @@ We compare our method with:
 - Gradient x Input
 
 We use [Captum](https://captum.ai/) implementation of gradient-based methods.
+
 ### Text Classification
+To get correlations between different interpretability methods (Table 2), and special tokens ranks (Figure 6) run:
+```baspython $CONTRIB_ROOT/src/correlations.py \
+  -model bert \         # model: bert/distilbert/roberta
+  -dataset sst2 \       # dataset to use: sst2/sva
+  -samples 500 \        # number of samples
+```
+To analyze model predictions with the proposed (and others) intepretability methods in SST2 dataset:
 ```bash
 Text_classification.ipynb
 ```
 ### Subject-verb Agreement
+To analyze model predictions with the proposed (and others) intepretability methods in Subject-Verb Agreement dataset:
+
 ```bash
-SV.ipynb
+SVA.ipynb
 ```

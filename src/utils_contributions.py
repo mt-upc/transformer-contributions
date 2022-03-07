@@ -19,7 +19,7 @@ from ipywidgets import IntProgress
 import torch.nn.functional as F
 
 
-from contributions import ModelWrapper, ClassificationModelWrapperCaptum, LMModelWrapperCaptum
+from src.contributions import ModelWrapper, ClassificationModelWrapperCaptum, LMModelWrapperCaptum
 import matplotlib
 #matplotlib.use('Agg')
 
@@ -73,7 +73,13 @@ def load_model_data(model_name,dataset_name=None):
             tokenizer = AutoTokenizer.from_pretrained("textattack/roberta-base-imdb")
             model = AutoModelForSequenceClassification.from_pretrained("textattack/roberta-base-imdb")
     else:
-        print('No dataset provided, loading pre-trained models and no dataset')
+        if dataset_name == 'sva':
+            data_file = open("data/lgd_dataset.tsv",encoding="utf8")
+            dataset = data_file.readlines()
+        else:
+            print('No dataset provided, loading pre-trained models and no dataset')
+            dataset = None
+        
         if model_name == 'bert':
             tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
             model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
@@ -88,7 +94,7 @@ def load_model_data(model_name,dataset_name=None):
         else:
             print('please select bert, distilbert or roberta')
             return -1
-        dataset = None
+        
 
     model.to(device)
     model.zero_grad()
@@ -113,8 +119,8 @@ def get_cos_mean(model_name,dataset_name,num_samples = 500):
             t_cos_layer[layer] = []
 
 
-    if dataset_name == 'linzen':
-        out_fn = f'cos_results/{model_name}_linzen_cos_results.json'   
+    if dataset_name == 'sva':
+        out_fn = f'cos_results/{model_name}_sva_cos_results.json'   
         for i,line in enumerate(open("data/lgd_dataset.tsv",encoding="utf8")):
             na,_,masked,good,bad = line.strip().split("\t")
             if i == num_samples:
@@ -184,16 +190,16 @@ def normalize_attribution_visualization(attributions):
     attributions = (attributions - min_importance_matrix) / (max_importance_matrix - min_importance_matrix)
     return attributions
 
-def normalize_contributions(model_contributions,scaling='minmax'):
-    """Normalization for the matrix of contributions/weights extracted from the model."""
+def normalize_contributions(model_contributions,scaling='minmax',resultant_norm=None):
+    """Normalization of the matrix of contributions/weights extracted from the model."""
 
     normalized_model_contributions = torch.zeros(model_contributions.size())
     for l in range(0,model_contributions.size(0)):
 
         if scaling == 'min_max':
             ## Min-max normalization
-            min_importance_matrix = model_contributions[l].min(1, keepdim=True)[0]
-            max_importance_matrix = model_contributions[l].max(1, keepdim=True)[0]
+            min_importance_matrix = model_contributions[l].min(-1, keepdim=True)[0]
+            max_importance_matrix = model_contributions[l].max(-1, keepdim=True)[0]
             normalized_model_contributions[l] = (model_contributions[l] - min_importance_matrix) / (max_importance_matrix - min_importance_matrix)
             normalized_model_contributions[l] = normalized_model_contributions[l] / normalized_model_contributions[l].sum(dim=-1,keepdim=True)
 
@@ -203,9 +209,14 @@ def normalize_contributions(model_contributions,scaling='minmax'):
 
         # For l1 distance between resultant and transformer vectors we apply min_sum
         elif scaling == 'min_sum':
-            min_importance_matrix = model_contributions[l].min(1, keepdim=True)[0]
-            normalized_model_contributions[l] = model_contributions[l] + torch.abs(min_importance_matrix)
-            normalized_model_contributions[l] = normalized_model_contributions[l] / normalized_model_contributions[l].sum(dim=-1,keepdim=True)
+            if resultant_norm == None:
+                min_importance_matrix = model_contributions[l].min(-1, keepdim=True)[0]
+                normalized_model_contributions[l] = model_contributions[l] + torch.abs(min_importance_matrix)
+                normalized_model_contributions[l] = normalized_model_contributions[l] / normalized_model_contributions[l].sum(dim=-1,keepdim=True)
+            else:
+                normalized_model_contributions[l] = model_contributions[l] + torch.abs(resultant_norm[l].unsqueeze(1))
+                normalized_model_contributions[l] = torch.clip(normalized_model_contributions[l],min=0)
+                normalized_model_contributions[l] = normalized_model_contributions[l] / normalized_model_contributions[l].sum(dim=-1,keepdim=True)
         else:
             print('No normalization selected!')
     return normalized_model_contributions
@@ -302,7 +313,8 @@ def latex_colorize(text, weights):
 
     s = ''
     for w, x in zip(text, weights):
-        color = np.digitize(x, np.arange(0, 1, 0.2)) - 1
+        w = w.replace('#','\#')
+        color = np.digitize(x, np.arange(0, 0.9, 0.1)) - 1
         s += ' ' + box.format(color_name.format(color), w)
     return s
 
@@ -311,7 +323,7 @@ def prepare_colorize():
 
     with open('latex_saliency/colorize.tex', 'w') as f:
         cmap = plt.cm.get_cmap('Blues')
-        for i, x in enumerate(np.arange(0, 1, 0.2)):
+        for i, x in enumerate(np.arange(0, 0.9, 0.1)):
             rgb = matplotlib.colors.rgb2hex(cmap(x)[:3])
             # convert to upper to circumvent xcolor bug
             rgb = rgb[1:].upper() if x > 0 else 'FFFFFF'
@@ -322,20 +334,29 @@ def prepare_colorize():
         f.write('''\\newcommand*{\mybbox}[2]{\\tikz[anchor=base,baseline=0pt,inner sep=0.2mm,] \\node[draw=black,thick,fill=#1!60!white] (X) {#2};}''')
 
 
-def figure_saliency(attributions_list,tokenized_text):
+def figure_saliency(attributions_list, tokenized_text, methods_list):
     """ Creates rows of paper's tables by adding the corresponding color to the text."""
 
+    methods_dict = {0:'$\\text{Grad}_{l2}$', 1:'Grad $\\cdot$ input', 2:'Integrated Gradients', 3:'Attn Rollout', 4:'Norm Rollout', 5:'Ours'}
+
+
     words_weights = []
-    for attr in attributions_list:
+    for i in methods_list:
+        attr = attributions_list[i]
         # We need to replace RoBERTa's special character
         words_weights.append((tokenized_text[i].replace('\u0120',''), element.item()) for i, element in enumerate(attr))
     
     
     with open('latex_saliency/figure.tex', 'w') as f:
-        for ww in words_weights:
+        for i, ww in enumerate(words_weights):
+            method_latex = methods_dict[methods_list[i]]
+            f.write('''\multicolumn{1}{l}{''' + method_latex + '''}\\\ \n''')
             words, weights = list(map(list, zip(*ww)))
-            #words.replace('\u0120','')
             f.write(latex_colorize(words, weights)+'\\\\\n')
+            if i == len(words_weights)-1:
+                f.write('''\\bottomrule''')
+            else:
+                f.write('''\\addlinespace\n''')
 
 
 def compute_joint_attention(att_mat):
