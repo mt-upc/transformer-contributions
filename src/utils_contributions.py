@@ -332,12 +332,8 @@ def prepare_colorize():
         f.write('''\\newcommand*{\mybbox}[2]{\\tikz[anchor=base,baseline=0pt,inner sep=0.2mm,] \\node[draw=black,thick,fill=#1!60!white] (X) {#2};}''')
 
 
-def figure_saliency(attributions_list, tokenized_text, methods_list):
+def figure_saliency(attributions_list, tokenized_text, methods_list, methods_dict):
     """ Creates rows of paper's tables by adding the corresponding color to the text."""
-
-    methods_dict = {0:'$\\text{Grad}_{l2}$', 1:'Grad $\\cdot$ input', 2:'Integrated Gradients', 3:'Attn Rollout', 4:'Norm Rollout', 5:'Ours'}
-
-
     words_weights = []
     for i in methods_list:
         attr = attributions_list[i]
