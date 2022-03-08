@@ -4,8 +4,6 @@ from functools import partial
 import collections
 import torch.nn as nn
 
-import json
-import h5py
 import random
 import numpy as np
 
@@ -83,13 +81,12 @@ class ModelWrapper(nn.Module):
                 LayerNorm = self.model.roberta.encoder.layer[layer].attention.output.LayerNorm
                 pre_ln_states = func_inputs[self.model.config.model_type +'.encoder.layer.' + str(layer) + '.attention.output.LayerNorm'][0][0]      
             
-            # Make transformed vectors T(x) from Value vectors (value_layer) and weight matrix (dense).
-            dense_bias = dense.bias#.view(self.attention_head_size, self.num_attention_heads, 1)
+            # VW_O
+            dense_bias = dense.bias
             dense = dense.weight.view(self.all_head_size, self.num_attention_heads, self.attention_head_size)
             transformed_layer = torch.einsum('bhsv,dhv->bhsd', value_layer, dense) #(batch, num_heads, seq_length, all_head_size)
 
-            # Make weighted vectors αf(x) from transformed vectors (transformed_layer) 
-            # and attention weights (attentions):
+            # AVW_O
             # (batch, num_heads, seq_length, seq_length, all_head_size)
             weighted_layer = torch.einsum('bhks,bhsd->bhksd', attention_probs, transformed_layer)
             
@@ -102,7 +99,7 @@ class ModelWrapper(nn.Module):
             device = hidden_states.device
             residual = torch.einsum('sk,bsd->bskd', torch.eye(hidden_shape[1]).to(device), hidden_states)
 
-            # Summed weighted vector + residual vectors -> (batch,seq_len,seq_len,embed_dim)
+            # AVW_O + residual vectors -> (batch,seq_len,seq_len,embed_dim)
             residual_weighted_layer = summed_weighted_layer + residual
 
             # consider layernorm
@@ -119,40 +116,26 @@ class ModelWrapper(nn.Module):
 
             each_mean = residual_weighted_layer.mean(-1, keepdim=True) # (batch, seq_len, seq_len, 1)
 
+            # LAVW_O + residual vectors
             normalized_layer = residual_weighted_layer - each_mean
 
-            # W^O bias term N(b^O)
+            # W_O bias term Lb_O)
             dense_bias_term = torch.einsum('df,f->d', norm_matrix, dense_bias)
             mean_pre_ln = pre_ln_states.mean(-1, keepdim=True) # (batch, seq_len, 1)
             var_pre_ln = (pre_ln_states - mean_pre_ln).pow(2).mean(-1, keepdim=True)#.unsqueeze(dim=2) # (batch, seq_len, 1)
 
-            # Original
+            # Transformed vectors T_i(x_j)
             transformed_vectors = torch.einsum('bskd,d->bskd', normalized_layer, ln_weight) # (batch, seq_len, seq_len, all_head_size)
-            # V2 (add)
-            # print(transformed_vectors.size())
-            # print('var_pre_ln',var_pre_ln.size())
-            #transformed_vectors = transformed_vectors/(var_pre_ln.unsqueeze(-1) + ln_eps)**(1/2)
 
             transformed_vectors_norm = torch.norm(transformed_vectors, dim=-1) # (batch, seq_len, seq_len)
 
             # Output vectors 1 per source token
             attn_output = transformed_vectors.sum(dim=2) #(batch,seq_len,all_head_size)
 
-            # Original
-            #resultant = (attn_output + dense_bias_term)/((var_pre_ln + ln_eps)**(1/2)) + ln_bias
-
-            # V2
-            #dense_bias_term = dense_bias_term/((var_pre_ln + ln_eps)**(1/2))
-
-            # print('attn_output',attn_output.size())
-            # print('dense_bias_term',dense_bias_term.size())
-            # print('ln_bias',ln_bias.size())
             resultant = (attn_output + dense_bias_term)/((var_pre_ln + ln_eps)**(1/2)) + ln_bias
             #print('resultant',resultant)
-
             #print('actual output', func_outputs[self.model.config.model_type +'.encoder.layer.' + str(layer) + '.attention.output.LayerNorm'][0])
 
-            ## FINAL
             importance_matrix = -F.pairwise_distance(transformed_vectors, resultant.unsqueeze(2),p=1)
             
             model_importance_list.append(torch.squeeze(importance_matrix))
@@ -304,7 +287,6 @@ def interpret_sentence_sv(model_wrapper, tokenizer, sentence, method, mask_pos, 
 
     input_ids = torch.tensor([tokenizer.encode(sentence, add_special_tokens=True)]).to(device)
     input_embedding = get_embedding(model_wrapper,input_ids)
-    #pred_class, pred_value = model_wrapper.get_prediction(input_embedding)
 
     pred_class = label
 

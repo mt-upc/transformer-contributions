@@ -2,7 +2,7 @@
 
 ## Abstract
 <em>
-The Transformer architecture aggregates input information through the attention mechanism, but there is no clear understanding of how this information is mixed across the entire model. Recent works have demonstrated that attention weights alone are not enough to describe the flow of information. In this paper, we consider the whole attention block --multi-head attention, residual connection and layer normalization-- and define a metric to measure token-to-token interactions within each layer, considering the characteristics of the representation space. Then, we aggregate the layer-wise interpretations to provide input attribution scores for model predictions. Experimentally, we show that our method provides faithful explanations and outperforms similar aggregation methods.
+The Transformer architecture aggregates input information through the self-attention mechanism, but there is no clear understanding of how this information is mixed across the entire model. Aditionally, recent works have demonstrated that attention weights alone are not enough to describe the flow of information. In this paper, we consider the whole attention block --multi-head attention, residual connection and layer normalization-- and define a metric to measure token-to-token interactions within each layer, considering the characteristics of the representation space. Then, we aggregate layer-wise interpretations to provide input attribution scores for model predictions. Experimentally, we show that our method, ALTI (Aggregation of Layer-wise Token-to-token Interactions), provides faithful explanations and outperforms similar aggregation methods.
 </em>
 
 ## Installation
@@ -27,7 +27,7 @@ We compare our method with:
 We use [Captum](https://captum.ai/) implementation of gradient-based methods.
 
 ### Text Classification
-To get correlations between different interpretability methods (Table 2), and special tokens ranks (Figure 6):
+To reproduce Table 2, Figure 6 and 7 first run the following file with the different models and datasets:
 ```bash
 python ${CONTRIB_ROOT}/correlations.py \
   -model bert \         # model: bert/distilbert/roberta

@@ -3,17 +3,13 @@ from src.utils_contributions import *
 import torch.nn.functional as F
 from src.contributions import ModelWrapper, ClassificationModelWrapperCaptum, interpret_sentence_sst2
 #import contributions
-import pandas as pd
-import h5py
 import json
 import statistics
 import random
 random.seed(10)
 
-import argparse
-
 from collections import defaultdict
-import codecs, json
+import json
 
 import torch.nn as nn
 
@@ -240,7 +236,6 @@ def compute_correlation(relevancies, methods_list, reference_method):
 
     return corrs_method
 
-
 def main(args):
     model_name = args[0]
     dataset_name = args[1]
@@ -251,12 +246,18 @@ def main(args):
     # Random samples from test set (no duplicates)
     random.seed(10)
     random_samples_list = random.sample(range(len(dataset_partition)), num_samples)
+
     if dataset_name == 'sva':
         relevancies = contribution_relevancies_sva(model, model_name, tokenizer, dataset_partition, random_samples_list)
         methods_list = ['raw','rollout','norm','ours']
         reference_method = 'blankout'
         corrs_method = compute_correlation(relevancies, methods_list, reference_method)
-    elif dataset_name == 'sst2:':
+
+        outfile = f'./data/{model_name}_{dataset_name}_correlations.json'
+        with open(outfile, 'w') as f:
+            json.dump(corrs_method, f)
+
+    elif dataset_name == 'sst2':
         relevancies, special_tokens_relevancies = contribution_relevancies_sst2(model, model_name, tokenizer, dataset_partition, random_samples_list)
         grad_relevancies, grad_special_tokens_relevancies = gradient_relevancies(model, model_name, tokenizer, dataset_partition, random_samples_list)
 
@@ -283,10 +284,9 @@ def main(args):
         outfile = f'./data/sentences_{model_name}_{dataset_name}_rank_relevancies.npy'
         np.save(outfile,relevancies)
 
-    outfile = f'./data/{model_name}_{dataset_name}_correlations.json'
-    with open(outfile, 'w') as f:
-        json.dump(corrs_method, f)
-
+        outfile = f'./data/{model_name}_{dataset_name}_correlations.json'
+        with open(outfile, 'w') as f:
+            json.dump(corrs_method, f)  
 
 
 if __name__ == "__main__":
