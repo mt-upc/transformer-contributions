@@ -134,8 +134,9 @@ def get_cos_mean(model_name,dataset_name,num_samples = 500):
             good_verb_id = tokenizer.convert_tokens_to_ids(good)
             wrong_verb_id = tokenizer.convert_tokens_to_ids(bad)
             model_wrapped = ModelWrapper(model)
-            prediction_scores, hidden_states, attentions, transformed_vectors_norm_model, contributions, transformed_vectors = model_wrapped(pt_batch)
+            prediction_scores, hidden_states, _, contributions_data = model_wrapped(pt_batch)
             #transformed_vectors = transformed_vectors[:,1:-1,1:-1,:]
+            transformed_vectors = contributions_data['transformed_vectors']
             embeddings = torch.stack(hidden_states, dim=0).squeeze()#[:,1:-1,:]
             for layer in range(num_layers+1):
                 samples = random.sample(range(0,transformed_vectors.size(2)), k=2)
@@ -152,8 +153,9 @@ def get_cos_mean(model_name,dataset_name,num_samples = 500):
             sentence = dataset_partition[i]
             text = sentence['sentence']
             pt_batch = tokenizer(text, return_tensors="pt").to(device)
-            prediction_scores, hidden_states, attentions, transformed_vectors_norm_model, contributions, transformed_vectors = model_wrapped(pt_batch)
+            prediction_scores, hidden_states, _, contributions_data = model_wrapped(pt_batch)
             #transformed_vectors = transformed_vectors[:,1:-1,1:-1,:]
+            transformed_vectors = contributions_data['transformed_vectors']
             embeddings = torch.stack(hidden_states, dim=0).squeeze()#[:,1:-1,:]
             for layer in range(num_layers+1):
                 samples = random.sample(range(0,transformed_vectors.size(2)), k=2)

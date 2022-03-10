@@ -21,14 +21,12 @@ In our paper we use BERT, DistilBERT and RoBERTa models from Huggingface's [tran
 We compare our method with:
 - Attention Rollout ([Abnar and Zuidema., 2020](https://arxiv.org/pdf/2005.00928.pdf))
 - Attention Rollout + ([Kobayashi et al., 2021](https://arxiv.org/pdf/2109.07152.pdf))
-- Gradient Saliency
-- Integrated Gradients
-- Gradient x Input
+- Gradient-based methods: Gradient Saliency, Integrated Gradients and Gradient x Input
 
 We use [Captum](https://captum.ai/) implementation of gradient-based methods.
 
 ### Text Classification
-To reproduce Table 2, Figure 6 and 7 first run the following file with the different models and datasets:
+To reproduce Table 2, Figure 6 and 7, first run the following file with the different models and datasets:
 ```bash
 python ${CONTRIB_ROOT}/correlations.py \
   -model bert \         # model: bert/distilbert/roberta
@@ -41,7 +39,6 @@ Text_classification.ipynb
 ```
 ### Subject-verb Agreement
 To analyze model predictions with the proposed (and others) intepretability methods in Subject-Verb Agreement dataset:
-
 ```bash
 SVA.ipynb
 ```

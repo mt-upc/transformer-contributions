@@ -43,12 +43,8 @@ class ModelWrapper(nn.Module):
         return x.permute(0, 2, 1, 3)
 
     def get_contributions(self, hidden_states_model, attentions, func_inputs, func_outputs):
-        #   hidden_states: Representations from previous layer and inputs to self-attention. (batch, seq_length, all_head_size)
-        #   attention_probs: Attention weights calculated in self-attention. (batch, num_heads, seq_length, seq_length)
-        #   value_layer: Value vectors calculated in self-attention. (batch, num_heads, seq_length, head_size)
-        #   dense: Dense layer in self-attention. nn.Linear(all_head_size, all_head_size)
-        #   LayerNorm: nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
-        #   pre_ln_states: Vectors just before LayerNorm (batch, seq_length, all_head_size)
+        #   hidden_states_model: Representations from previous layer and inputs to self-attention. (batch, seq_length, all_head_size)
+        #   attentions: Attention weights calculated in self-attention. (batch, num_heads, seq_length, seq_length)
 
         model_importance_list = []
         transformed_vectors_norm_list = []
@@ -64,6 +60,11 @@ class ModelWrapper(nn.Module):
         for layer in range(num_layers):
             hidden_states = hidden_states_model[layer]
             attention_probs = attentions[layer]
+
+            #   value_layer: Value vectors calculated in self-attention. (batch, num_heads, seq_length, head_size)
+            #   dense: Dense layer in self-attention. nn.Linear(all_head_size, all_head_size)
+            #   LayerNorm: nn.LayerNorm(config.hidden_size, eps=config.layer_norm_eps)
+            #   pre_ln_states: Vectors just before LayerNorm (batch, seq_length, all_head_size)
             
             if self.model.config.model_type == 'bert':
                 value_layer = self.transpose_for_scores(func_outputs[self.model.config.model_type + '.encoder.layer.' + str(layer) + '.attention.self.value'][0])
@@ -95,7 +96,7 @@ class ModelWrapper(nn.Module):
             summed_weighted_layer = weighted_layer.sum(dim=1) # sum over heads
 
             # Make residual matrix (batch, seq_length, seq_length, all_head_size)
-            hidden_shape = hidden_states.size()  #(batch, seq_length, all_head_size)
+            hidden_shape = hidden_states.size()
             device = hidden_states.device
             residual = torch.einsum('sk,bsd->bskd', torch.eye(hidden_shape[1]).to(device), hidden_states)
 
@@ -107,34 +108,34 @@ class ModelWrapper(nn.Module):
             ln_eps = LayerNorm.eps
             ln_bias = LayerNorm.bias
 
-            ## norm_matrix computes mean and performs hadamard product with ln_bias as a linear transformation
-            mask = torch.diag(torch.ones_like(ln_weight)).to(device)
-            norm_matrix_ln_weight = mask*torch.diag(ln_weight)
-            norm_matrix_mean = torch.zeros(self.all_head_size,self.all_head_size).to(device)+(-1/self.all_head_size)
-            norm_matrix_mean = norm_matrix_mean.fill_diagonal_((self.all_head_size-1)/self.all_head_size)
-            norm_matrix = torch.mul(norm_matrix_ln_weight,norm_matrix_mean) # (all_head_size,all_head_size)
+            def l_transform(x, w_ln):
+                '''Computes mean and performs hadamard product with ln weight (w_ln) as a linear transformation'''
+                ln_param_transf = torch.diag(w_ln)
+                ln_mean_transf = torch.eye(w_ln.size(0)).to(w_ln.device) - \
+                    1 / w_ln.size(0) * torch.ones_like(ln_param_transf).to(w_ln.device)
 
-            each_mean = residual_weighted_layer.mean(-1, keepdim=True) # (batch, seq_len, seq_len, 1)
-
-            # LAVW_O + residual vectors
-            normalized_layer = residual_weighted_layer - each_mean
-
-            # W_O bias term Lb_O)
-            dense_bias_term = torch.einsum('df,f->d', norm_matrix, dense_bias)
-            mean_pre_ln = pre_ln_states.mean(-1, keepdim=True) # (batch, seq_len, 1)
-            var_pre_ln = (pre_ln_states - mean_pre_ln).pow(2).mean(-1, keepdim=True)#.unsqueeze(dim=2) # (batch, seq_len, 1)
+                out = torch.einsum(
+                    '... e , e f , f g -> ... g',
+                    x,
+                    ln_mean_transf,
+                    ln_param_transf
+                )
+                return out
 
             # Transformed vectors T_i(x_j)
-            transformed_vectors = torch.einsum('bskd,d->bskd', normalized_layer, ln_weight) # (batch, seq_len, seq_len, all_head_size)
+            transformed_vectors = l_transform(residual_weighted_layer, ln_weight)
 
             transformed_vectors_norm = torch.norm(transformed_vectors, dim=-1) # (batch, seq_len, seq_len)
 
             # Output vectors 1 per source token
             attn_output = transformed_vectors.sum(dim=2) #(batch,seq_len,all_head_size)
 
-            resultant = (attn_output + dense_bias_term)/((var_pre_ln + ln_eps)**(1/2)) + ln_bias
-            #print('resultant',resultant)
-            #print('actual output', func_outputs[self.model.config.model_type +'.encoder.layer.' + str(layer) + '.attention.output.LayerNorm'][0])
+            # Lb_O
+            dense_bias_term = l_transform(dense_bias, ln_weight)
+
+            ln_std_coef = 1/(pre_ln_states + ln_eps).std(-1).view(1, -1, 1)
+            # y_i
+            resultant = (attn_output + dense_bias_term)*ln_std_coef + ln_bias
 
             importance_matrix = -F.pairwise_distance(transformed_vectors, resultant.unsqueeze(2),p=1)
             
@@ -142,6 +143,7 @@ class ModelWrapper(nn.Module):
             transformed_vectors_norm_list.append(torch.squeeze(transformed_vectors_norm))
             transformed_vectors_list.append(torch.squeeze(transformed_vectors))
             resultants_list.append(torch.squeeze(resultant))
+
         contributions_model = torch.stack(model_importance_list)
         transformed_vectors_norm_model = torch.stack(transformed_vectors_norm_list)
         transformed_vectors_model = torch.stack(transformed_vectors_list)
@@ -152,8 +154,6 @@ class ModelWrapper(nn.Module):
         contributions_data['transformed_vectors_norm'] = transformed_vectors_norm_model
         contributions_data['resultants'] = resultants_model
 
-
-        #return contributions_model, transformed_vectors_norm_model, transformed_vectors_model
         return contributions_data
 
     def get_prediction(self, input_model):
@@ -166,11 +166,10 @@ class ModelWrapper(nn.Module):
         with torch.no_grad():
             prediction_scores, hidden_states, attentions = self.model(**input_model, output_hidden_states=True, output_attentions=True)
             
-            #contributions_model, transformed_vectors_norm_model, transformed_vectors_model = self.get_contributions(hidden_states, attentions, self.func_inputs, self.func_outputs)
             contributions_data = self.get_contributions(hidden_states, attentions, self.func_inputs, self.func_outputs)
+
             # Clean forward_hooks dictionaries
             self.clean_hooks()
-            #return prediction_scores, hidden_states, attentions, transformed_vectors_norm_model, contributions_model, transformed_vectors_model
             return prediction_scores, hidden_states, attentions, contributions_data
 
 
@@ -247,9 +246,6 @@ def interpret_sentence_sst2(model_wrapper, tokenizer, sentence, method):
 
         attribution, _delta = ig.attribute(input_embedding, baselines=ref_input_ids, target = pred_class, n_steps=100, return_convergence_delta=True)
         attribution = torch.squeeze(torch.sum(attribution,dim=-1))
-        # Clip negative scores
-        # attribution = attribution.clip(min=0)
-        # attribution = attribution / attribution.sum()[...,None]
         
         # Absolute value of attributions (Abnar and Zuidema, 2020)
         attribution = torch.abs(attribution)
@@ -264,10 +260,6 @@ def interpret_sentence_sst2(model_wrapper, tokenizer, sentence, method):
     elif method == 'grad_input':
         attribution = input_x_gradient.attribute(input_embedding, target=pred_class)
         attribution = torch.squeeze(torch.sum(attribution,dim=-1))
-        
-        # Clip negative scores
-        # attribution = attribution.clip(min=0)
-        # attribution = attribution / attribution.sum()[...,None]
         
         # Absolute value of attributions (Abnar and Zuidema, 2020)
         attribution = torch.abs(attribution)
@@ -306,10 +298,6 @@ def interpret_sentence_sv(model_wrapper, tokenizer, sentence, method, mask_pos, 
 
         attribution = torch.squeeze(torch.sum(attribution,dim=-1))
         
-        # Clip negative scores
-        # attribution = attribution.clip(min=0)
-        # attribution = attribution / attribution.sum()[...,None]
-        
         # Absolute value of attributions (Abnar and Zuidema, 2020)
         attribution = torch.abs(attribution)
         attribution = attribution / attribution.sum()[...,None]
@@ -326,10 +314,6 @@ def interpret_sentence_sv(model_wrapper, tokenizer, sentence, method, mask_pos, 
     elif method == 'grad_input':
         attribution = input_x_gradient.attribute(input_embedding, target=pred_class, additional_forward_args=(mask_pos))
         attribution = torch.squeeze(torch.sum(attribution,dim=-1))
-        ## grad x input (dot product between grad and embedding), sum components
-        # Clip negative scores
-        # attribution = attribution.clip(min=0)
-        # attribution = attribution / attribution.sum()[...,None]
         
         # Absolute value of attributions (Abnar and Zuidema, 2020)
         attribution = torch.abs(attribution)
