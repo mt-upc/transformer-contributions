@@ -2,9 +2,15 @@
 
 ### Implementation of the paper [Measuring the Mixing of Contextual Information in the Transformer](https://arxiv.org/pdf/2203.04212.pdf)
 ## Abstract
+<p>
 <em>
 The Transformer architecture aggregates input information through the self-attention mechanism, but there is no clear understanding of how this information is mixed across the entire model. Additionally, recent works have demonstrated that attention weights alone are not enough to describe the flow of information. In this paper, we consider the whole attention block --multi-head attention, residual connection, and layer normalization-- and define a metric to measure token-to-token interactions within each layer, considering the characteristics of the representation space. Then, we aggregate layer-wise interpretations to provide input attribution scores for model predictions. Experimentally, we show that our method, ALTI (Aggregation of Layer-wise Token-to-token Interactions), provides faithful explanations and outperforms similar aggregation methods.
 </em>
+</p>
+
+<p align="center"><br>
+<img src="./img/layers_relevances_example_bert.png" class="center" title="paper logo" width="800"/>
+</p><br>
 
 ## Installation
 Clone this repostitory to `$CONTRIB_ROOT`:

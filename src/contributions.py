@@ -109,7 +109,7 @@ class ModelWrapper(nn.Module):
             ln_bias = LayerNorm.bias
 
             def l_transform(x, w_ln):
-                '''Computes mean and performs hadamard product with ln weight (w_ln) as a linear transformation'''
+                '''Computes mean and performs hadamard product with ln weight (w_ln) as a linear transformation.'''
                 ln_param_transf = torch.diag(w_ln)
                 ln_mean_transf = torch.eye(w_ln.size(0)).to(w_ln.device) - \
                     1 / w_ln.size(0) * torch.ones_like(ln_param_transf).to(w_ln.device)
@@ -123,8 +123,7 @@ class ModelWrapper(nn.Module):
                 return out
 
             # Transformed vectors T_i(x_j)
-            transformed_vectors = l_transform(residual_weighted_layer, ln_weight)
-
+            transformed_vectors = l_transform(residual_weighted_layer, ln_weight)# (batch, seq_len, seq_len, all_head_size)
             transformed_vectors_norm = torch.norm(transformed_vectors, dim=-1) # (batch, seq_len, seq_len)
 
             # Output vectors 1 per source token
@@ -132,16 +131,19 @@ class ModelWrapper(nn.Module):
 
             # Lb_O
             dense_bias_term = l_transform(dense_bias, ln_weight)
-
-            ln_std_coef = 1/(pre_ln_states + ln_eps).std(-1).view(1, -1, 1)
+            
             # y_i
+            ln_std_coef = 1/(pre_ln_states + ln_eps).std(-1).view(1, -1, 1) # (batch,seq_len,1)
             resultant = (attn_output + dense_bias_term)*ln_std_coef + ln_bias
 
-            importance_matrix = -F.pairwise_distance(transformed_vectors, resultant.unsqueeze(2),p=1)
+            transformed_vectors_std = l_transform(residual_weighted_layer, ln_weight)*ln_std_coef.unsqueeze(-1)
+            transformed_vectors_norm_std = torch.norm(transformed_vectors_std, dim=-1) # (batch, seq_len, seq_len)           
+
+            importance_matrix = -F.pairwise_distance(transformed_vectors_std, resultant.unsqueeze(2),p=1)
             
             model_importance_list.append(torch.squeeze(importance_matrix))
-            transformed_vectors_norm_list.append(torch.squeeze(transformed_vectors_norm))
-            transformed_vectors_list.append(torch.squeeze(transformed_vectors))
+            transformed_vectors_norm_list.append(torch.squeeze(transformed_vectors_norm_std))
+            transformed_vectors_list.append(torch.squeeze(transformed_vectors_std))
             resultants_list.append(torch.squeeze(resultant))
 
         contributions_model = torch.stack(model_importance_list)
