@@ -89,7 +89,7 @@ def contribution_relevancies_sva(model, model_name, tokenizer, dataset_partition
         extended_x = np.reshape(np.tile(x[:,None,...], (1, max_len, 1)),(-1,x.shape[-1]))
 
         # Create unk sequences and unk mask
-        unktoken = tokenizer.encode([tokenizer.mask_token])[1]
+        unktoken = tokenizer.mask_token_id
         unks = unktoken * np.eye(max_len)
         unks =  np.tile(unks, (batch_size, 1))
 

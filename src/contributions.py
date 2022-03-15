@@ -160,13 +160,18 @@ class ModelWrapper(nn.Module):
 
     def get_prediction(self, input_model):
         with torch.no_grad():
-            prediction_scores, hidden_states, attentions = self.model(input_model, output_hidden_states=True, output_attentions=True)
+            output = self.model(input_model, output_hidden_states=True, output_attentions=True)
+            prediction_scores = output['logits']
+
             return prediction_scores
 
 
     def __call__(self,input_model):
         with torch.no_grad():
-            prediction_scores, hidden_states, attentions = self.model(**input_model, output_hidden_states=True, output_attentions=True)
+            output = self.model(**input_model, output_hidden_states=True, output_attentions=True)
+            prediction_scores = output['logits']
+            hidden_states = output['hidden_states']
+            attentions = output['attentions']
             
             contributions_data = self.get_contributions(hidden_states, attentions, self.func_inputs, self.func_outputs)
 
