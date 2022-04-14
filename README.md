@@ -31,14 +31,21 @@ We compare our method with:
 
 We use [Captum](https://captum.ai/) implementation of gradient-based methods.
 
-### Text Classification
-To reproduce Table 2, Figure 6 and 7, first run the following file with the different models and datasets:
+First, get the attributions obtained by each method for the specified model and dataset:
 ```bash
-python ${CONTRIB_ROOT}/correlations.py \
+python ${CONTRIB_ROOT}/attributions.py \
   -model bert \         # model: bert/distilbert/roberta
   -dataset sst2 \       # dataset to use: sst2/sva
   -samples 500 \        # number of samples
 ```
+To reproduce Table 2, Figure 6 and 7, run the following command:
+
+```bash
+python ${CONTRIB_ROOT}/correlations.py \
+  -model bert \         # model: bert/distilbert/roberta
+  -dataset sst2 \       # dataset to use: sst2/sva
+```
+### Text Classification
 To analyze model predictions with the proposed (and others) intepretability methods in SST2 dataset:
 ```bash
 Text_classification.ipynb

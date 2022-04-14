@@ -44,6 +44,7 @@ def load_model_data(model_name,dataset_name=None):
     print('Loading',model_name,'...')
     print('Loading',dataset_name,'...')
 
+    # SST2
     if dataset_name == 'sst2':
         dataset = load_dataset('glue', 'sst2',split='test')
         if model_name == 'bert':
@@ -58,7 +59,7 @@ def load_model_data(model_name,dataset_name=None):
         else:
             print('please select bert, distilbert or roberta')
             return -1
-
+    # IMDB
     elif dataset_name == 'imdb':
         dataset = load_dataset("imdb",split='test')
         if model_name == 'bert':
@@ -70,6 +71,13 @@ def load_model_data(model_name,dataset_name=None):
         elif model_name == 'roberta':
             tokenizer = AutoTokenizer.from_pretrained("textattack/roberta-base-imdb")
             model = AutoModelForSequenceClassification.from_pretrained("textattack/roberta-base-imdb")
+    # YELP
+    elif dataset_name == 'yelp':
+        dataset = load_dataset("yelp_polarity",split='test')
+        if model_name == 'bert':
+            tokenizer = AutoTokenizer.from_pretrained("textattack/bert-base-uncased-yelp-polarity")
+            model = AutoModelForSequenceClassification.from_pretrained("textattack/bert-base-uncased-yelp-polarity")
+            
     else:
         if dataset_name == 'sva':
             data_file = open("data/lgd_dataset.tsv",encoding="utf8")
@@ -355,28 +363,44 @@ def figure_saliency(attributions_list, tokenized_text, methods_list, methods_dic
                 f.write('''\\addlinespace\n''')
 
 
+# def compute_joint_attention(att_mat):
+#     """ Compute attention rollout given contributions or attn weights + residual."""
+
+#     aug_att_mat =  att_mat
+#     device = att_mat.device
+#     joint_attentions = torch.zeros(aug_att_mat.size()).to(device)
+
+#     layers = joint_attentions.shape[0]
+#     joint_attentions[0] = aug_att_mat[0]
+#     #joint_attentions[0] = joint_attentions[0] / joint_attentions[0].sum(dim=-1,keepdim=True)
+    
+        
+#     for i in np.arange(1,layers):
+#         joint_attentions[i] = torch.matmul(aug_att_mat[i],joint_attentions[i-1])
+        
+        
+#     return joint_attentions
+
 def compute_joint_attention(att_mat):
     """ Compute attention rollout given contributions or attn weights + residual."""
 
-    aug_att_mat =  att_mat
-    device = att_mat.device
-    joint_attentions = torch.zeros(aug_att_mat.size()).to(device)
+    joint_attentions = torch.zeros(att_mat.size()).to(att_mat.device)
 
     layers = joint_attentions.shape[0]
-    joint_attentions[0] = aug_att_mat[0]
-    #joint_attentions[0] = joint_attentions[0] / joint_attentions[0].sum(dim=-1,keepdim=True)
-    
-        
-    for i in np.arange(1,layers):
-        joint_attentions[i] = torch.matmul(aug_att_mat[i],joint_attentions[i-1])
-        
+
+    joint_attentions = att_mat[0].unsqueeze(0)
+
+    for i in range(1,layers):
+
+        C_roll_new = torch.matmul(att_mat[i],joint_attentions[i-1])
+
+        joint_attentions = torch.cat([joint_attentions, C_roll_new.unsqueeze(0)], dim=0)
         
     return joint_attentions
 
 
 def compute_rollout(att_mat):
     """ Compute rollout method for raw attention weights."""
-
     # Add residual connection
     res_att_mat = att_mat + np.eye(att_mat.shape[1])[None,...]
     # Normalize to sum 1
@@ -385,3 +409,43 @@ def compute_rollout(att_mat):
     joint_attentions = compute_joint_attention(res_att_mat_torch) # (num_layers,src_len,src_len)
     return joint_attentions
 
+def get_word_attributions(subword_attributions, subwords_words, pos=0):
+    '''
+    From subwords tokens contributions to words contribution
+    '''
+    word_attributions = []
+    for i, word in enumerate(subwords_words):
+        word_attributions.append(subword_attributions[word].sum())
+
+    return np.array(word_attributions)
+
+def convert_subwords_word(splited_subword_sent, splited_word_sent):
+    """
+    Given a sentence made of BPE subwords and words (as a string), 
+    returns a list of lists where each sub-list contains BPE subwords
+    for the correponding word.
+    """
+
+    #splited_bpe_sent = bpe_sent.split()
+    #splited_word_sent = splited_word_sent.split()
+    word_to_bpe = [[] for _ in range(len(splited_word_sent))]
+
+    
+    word_i = 0
+    for bpe_i, token in enumerate(splited_subword_sent):
+        if bpe_i == 0:
+            word_to_bpe[word_i].append(bpe_i)
+        # if bpe_i == 0:
+        #     # First token may use ▁
+        #     word_to_bpe[word_i].append(bpe_i)
+        else:
+            if not token.startswith("##"):
+                word_i += 1
+            word_to_bpe[word_i].append(bpe_i)
+        
+    
+    for word in word_to_bpe:
+        assert len(word) != 0
+    
+    #word_to_bpe.append([len(splited_subword_sent)])
+    return word_to_bpe
