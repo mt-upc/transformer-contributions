@@ -3,7 +3,7 @@ datasets==1.16.1
 ipython==8.1.1
 ipywidgets==7.6.5
 matplotlib==3.1.0
-numpy==1.19.5
+numpy==1.21.4
 pandas==1.1.5
 torch==1.10.0
 transformers==4.17.0
