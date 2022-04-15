@@ -261,7 +261,8 @@ def interpret_sentence_sst2(model_wrapper, tokenizer, sentence, method):
         ref_input_ids = get_embedding(model_wrapper,ref_input_ids)
 
         attribution, _delta = ig.attribute(input_embedding, baselines=ref_input_ids,
-                                            internal_batch_size=1, target = pred_class, n_steps=100, return_convergence_delta=True)
+                                            target = pred_class, n_steps=100, return_convergence_delta=True)
+                                            # internal_batch_size=1 to save memory
         attribution = torch.squeeze(torch.sum(attribution,dim=-1))
 
         # Absolute value of attributions (Abnar and Zuidema, 2020)
@@ -309,7 +310,6 @@ def interpret_sentence_sv(model_wrapper, tokenizer, sentence, method, mask_pos, 
         ref_input_ids = get_embedding(model_wrapper,ref_input_ids)
 
         attribution, _delta = ig.attribute(input_embedding, baselines=ref_input_ids,
-                                            internal_batch_size=1,
                                             target = pred_class, n_steps=100,
                                             return_convergence_delta=True,
                                             additional_forward_args=(mask_pos))
