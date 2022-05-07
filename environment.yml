@@ -1,0 +1,19 @@
+name: alti
+
+channels:
+  - pytorch
+  - conda-forge
+
+dependencies:
+  - python=3.7.10
+  - ipython=7.33.0
+  - jupyterlab=3.3.4
+  - ipywidgets=7.6.5
+  - numpy=1.21.4
+  - pandas=1.1.5
+  - matplotlib=3.1.0
+  - pytorch=1.10.0
+  - datasets=1.16.1
+  - transformers=4.16.2
+  - captum=0.4.1
+  - scikit-learn=1.0.2
