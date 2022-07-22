@@ -6,6 +6,7 @@ channels:
 
 dependencies:
   - python=3.7.10
+  - pip=22.0.3
   - ipython=7.33.0
   - jupyterlab=3.3.4
   - ipywidgets=7.6.5
@@ -13,7 +14,14 @@ dependencies:
   - pandas=1.1.5
   - matplotlib=3.1.0
   - pytorch=1.10.0
+  - cudatoolkit=11.3.1
+  - transformers=4.17.0
   - datasets=1.16.1
-  - transformers=4.16.2
   - captum=0.4.1
-  - scikit-learn=1.0.2
+  - scikit-learn=1.0.2 # 0.24.2
+  - python-dotenv=0.20.0
+  - pyarrow=3.0.0
+  - spacy=3.3.1
+  - pip:
+    - pyaml-env==1.1.5
+    - seaborn==0.11.2

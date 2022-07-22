@@ -12,12 +12,17 @@ The Transformer architecture aggregates input information through the self-atten
 <img src="./img/layers_relevances_example_bert.png" class="center" title="paper logo" width="800"/>
 </p><br>
 
-## Installation
-Clone this repostitory to `$CONTRIB_ROOT`:
-```bash
-!git clone https://github.com/javiferran/transformer_contributions.git ${CONTRIB_ROOT}
+## Environment Setup
 
-pip install -r ${CONTRIB_ROOT}/requirements.txt
+Clone this repostitory:
+```bash
+!git clone https://github.com/javiferran/transformer_contributions.git
+```
+
+Create a conda environment using the `environment.yml` file, and activate it:
+```bash
+conda env create -f ./environment.yml && \
+conda activate alti
 ```
 
 ## Usage with Transformers
@@ -33,7 +38,7 @@ We use [Captum](https://captum.ai/) implementation of gradient-based methods.
 
 First, get the attributions obtained by each method for the specified model and dataset:
 ```bash
-python ${CONTRIB_ROOT}/attributions.py \
+python ./attributions.py \
   -model bert \         # model: bert/distilbert/roberta
   -dataset sst2 \       # dataset to use: sst2/sva
   -samples 500 \        # number of samples
@@ -41,7 +46,7 @@ python ${CONTRIB_ROOT}/attributions.py \
 To reproduce Table 2, Figure 6 and 7, run the following command:
 
 ```bash
-python ${CONTRIB_ROOT}/correlations.py \
+python ./correlations.py \
   -model bert \         # model: bert/distilbert/roberta
   -dataset sst2 \       # dataset to use: sst2/sva
 ```
