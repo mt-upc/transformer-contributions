@@ -60,3 +60,19 @@ To analyze model predictions with the proposed (and others) intepretability meth
 ```bash
 SVA.ipynb
 ```
+## Citation
+If you use ALTI in your work, please consider citing:
+
+```bibtex
+@misc{alti,
+  title = {Measuring the Mixing of Contextual Information in the Transformer},
+  author = {Ferrando, Javier and Gállego, Gerard I. and Costa-jussà, Marta R.},
+  doi = {10.48550/ARXIV.2203.04212},
+  url = {https://arxiv.org/abs/2203.04212},
+  keywords = {Computation and Language (cs.CL), FOS: Computer and information sciences, FOS: Computer and information sciences},
+  publisher = {arXiv},
+  year = {2022},
+  copyright = {arXiv.org perpetual, non-exclusive license}
+}
+
+````
