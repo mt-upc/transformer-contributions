@@ -1,0 +1,22 @@
+models:
+  bert:
+    layer: 'bert.encoder.layer'
+    ln1: 'attention.output.LayerNorm'
+    ln2: 'output.LayerNorm'
+    values: 'attention.self.value'
+    dense: 'attention.output.dense'
+    pre_layer_norm: 'False'
+  roberta:
+    layer: 'roberta.encoder.layer'
+    ln1: 'attention.output.LayerNorm'
+    ln2: 'output.LayerNorm'
+    values: 'attention.self.value'
+    dense: 'attention.output.dense'
+    pre_layer_norm: 'False'
+  distilbert:
+    layer: 'distilbert.transformer.layer'
+    ln1: 'sa_layer_norm'
+    ln2: 'output_layer_norm'
+    values: 'attention.v_lin'
+    dense: 'attention.out_lin'
+    pre_layer_norm: 'False'

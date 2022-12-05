@@ -12,12 +12,17 @@ random.seed(10)
 
 from datasets import load_dataset
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from transformers import AutoTokenizer, AutoModelForMaskedLM
+from transformers import AutoTokenizer, AutoModelForMaskedLM, BertModel
+from transformers.modeling_utils import PreTrainedModel
 from ipywidgets import IntProgress
 import torch.nn.functional as F
 
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv()
 
-from src.contributions import ModelWrapper, ClassificationModelWrapperCaptum, LMModelWrapperCaptum
+from src.contributions import ModelWrapper
 import matplotlib
 #matplotlib.use('Agg')
 
@@ -30,12 +35,30 @@ try:
 except ImportError:
     HAS_IPYTHON = False
 
+rc={'font.size': 20, 'axes.labelsize': 20, 'legend.fontsize': 20,
+    'axes.titlesize': 24, 'xtick.labelsize': 15, 'ytick.labelsize': 15,
+    'axes.linewidth': 1, 'figure.figsize': (12,12)}
+plt.rcParams.update(**rc)
+
 color_name = 'color{}'
 define_color = '\definecolor{{{}}}{{HTML}}{{{}}}'
 box = '\\mybox{{{}}}{{\strut{{{}}}}}'
 
+if os.environ.get('MODELS_DIR') is not None:
+    models_dir = Path(os.environ['MODELS_DIR']).as_posix()
+    
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
+def prepare_sva_sentence(i, dataset_partition, tokenizer):
+    masked = dataset_partition.iloc[i]['sentence']
+    text = masked.replace('***mask***',tokenizer.mask_token)
+    pt_batch = tokenizer(text, return_tensors="pt").to(device)
+    target_idx = (pt_batch['input_ids'][0] == tokenizer.mask_token_id).nonzero(as_tuple=True)
+    target_idx = target_idx[0].item() # position of the masked verb
+    tokenized_text = tokenizer.convert_ids_to_tokens(pt_batch["input_ids"][0])
+
+    return pt_batch, tokenized_text, target_idx
 
 
 def load_model_data(model_name,dataset_name=None):
@@ -56,8 +79,14 @@ def load_model_data(model_name,dataset_name=None):
         elif model_name == 'roberta':
             tokenizer = AutoTokenizer.from_pretrained("textattack/roberta-base-SST-2")
             model = AutoModelForSequenceClassification.from_pretrained("textattack/roberta-base-SST-2")
+        elif 'multiberts-seed' in model_name:
+            tokenizer = AutoTokenizer.from_pretrained(f"{models_dir}/multiberts/{model_name}-finetuned-sst2/checkpoint-12630")
+            model = AutoModelForSequenceClassification.from_pretrained(f"{models_dir}/multiberts/{model_name}-finetuned-sst2/checkpoint-12630")
+        elif 'Tehran' in model_name:
+            tokenizer = AutoTokenizer.from_pretrained("TehranNLP-org/bert-base-uncased-cls-sst2")
+            model = AutoModelForSequenceClassification.from_pretrained("TehranNLP-org/bert-base-uncased-cls-sst2")
         else:
-            print('please select bert, distilbert or roberta')
+            print('Please select bert, distilbert or roberta')
             return -1
     # IMDB
     elif dataset_name == 'imdb':
@@ -75,31 +104,58 @@ def load_model_data(model_name,dataset_name=None):
     elif dataset_name == 'yelp':
         dataset = load_dataset("yelp_polarity",split='test')
         if model_name == 'bert':
-            tokenizer = AutoTokenizer.from_pretrained("textattack/bert-base-uncased-yelp-polarity")
-            model = AutoModelForSequenceClassification.from_pretrained("textattack/bert-base-uncased-yelp-polarity")
-            
-    else:
-        if dataset_name == 'sva':
-            data_file = open("data/lgd_dataset.tsv",encoding="utf8")
-            dataset = data_file.readlines()
-        else:
-            print('No dataset provided, loading pre-trained models and no dataset')
-            dataset = None
+            tokenizer = AutoTokenizer.from_pretrained(f"{models_dir}/bert-base-uncased-finetuned-yelp/checkpoint-105000")
+            model = AutoModelForSequenceClassification.from_pretrained(f"{models_dir}/bert-base-uncased-finetuned-yelp/checkpoint-105000")
+        elif model_name == 'distilbert':
+            tokenizer = AutoTokenizer.from_pretrained(f"{models_dir}/distilbert-base-uncased-finetuned-yelp/checkpoint-105000")
+            model = AutoModelForSequenceClassification.from_pretrained(f"{models_dir}/distilbert-base-uncased-finetuned-yelp/checkpoint-105000")
+        elif model_name == 'roberta':
+            tokenizer = AutoTokenizer.from_pretrained("VictorSanh/roberta-base-finetuned-yelp-polarity")
+            model = AutoModelForSequenceClassification.from_pretrained("VictorSanh/roberta-base-finetuned-yelp-polarity")
+
+    # SVA           
+    elif dataset_name == 'sva':
+        df = pd.read_csv('data/lgd_dataset_bert-base-uncased.tsv', sep='\t', index_col=[0])
+        dataset = df[df.split == 'test'].drop('split', 1).reset_index(drop=True)
         
-        if model_name == 'bert':
+        if model_name == 'bert_bin':
             tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
             model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
+            model.cls.predictions.decoder = torch.nn.Linear(
+                model.cls.predictions.transform.dense.out_features, 1
+            )
+            model.load_state_dict(torch.load('/home/usuaris/scratch/gerard.ion.gallego/checkpoint350.pt'))
 
-        elif model_name == 'distilbert':
+        elif model_name == 'distilbert_bin':
             tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
             model = AutoModelForMaskedLM.from_pretrained("distilbert-base-uncased")
-
-        elif model_name == 'roberta':
+            model.vocab_projector = torch.nn.Linear(
+                model.vocab_projector.in_features, 1
+            )
+            model.load_state_dict(torch.load('/home/usuaris/veussd/gerard.ion.gallego/lgd_binary_classifier_ckpts/checkpoint_distilbert-base-uncased_2_653_0.13.pt'))
+        elif model_name == 'roberta_bin':
             tokenizer = AutoTokenizer.from_pretrained("roberta-base")
             model = AutoModelForMaskedLM.from_pretrained("roberta-base")
-        else:
-            print('please select bert, distilbert or roberta')
-            return -1
+            model.lm_head.decoder = torch.nn.Linear(
+                model.lm_head.decoder.in_features, 1
+            )
+            model.load_state_dict(torch.load('/home/usuaris/veussd/gerard.ion.gallego/lgd_binary_classifier_ckpts/checkpoint_roberta-base_4_655_0.14.pt'))
+            
+    else:
+        print('No dataset provided, loading pre-trained models and no dataset')
+        dataset = None
+        # elif model_name == 'bert':
+        #     tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+        #     model = AutoModelForMaskedLM.from_pretrained("bert-base-uncased")
+
+        # elif model_name == 'distilbert':
+        #     tokenizer = AutoTokenizer.from_pretrained("distilbert-base-uncased")
+        #     model = AutoModelForMaskedLM.from_pretrained("distilbert-base-uncased")
+
+        # elif model_name == 'roberta':
+        #     tokenizer = AutoTokenizer.from_pretrained("roberta-base")
+        #     model = AutoModelForMaskedLM.from_pretrained("roberta-base")
+        return -1
         
 
     model.to(device)
@@ -222,9 +278,17 @@ def normalize_contributions(model_contributions,scaling='minmax',resultant_norm=
                 normalized_model_contributions[l] = model_contributions[l] + torch.abs(min_importance_matrix)
                 normalized_model_contributions[l] = normalized_model_contributions[l] / normalized_model_contributions[l].sum(dim=-1,keepdim=True)
             else:
+                # print('resultant_norm[l]', resultant_norm[l].size())
+                # print('model_contributions[l]', model_contributions[l])
+                # print('normalized_model_contributions[l].sum(dim=-1,keepdim=True)', model_contributions[l].sum(dim=-1,keepdim=True))
                 normalized_model_contributions[l] = model_contributions[l] + torch.abs(resultant_norm[l].unsqueeze(1))
                 normalized_model_contributions[l] = torch.clip(normalized_model_contributions[l],min=0)
                 normalized_model_contributions[l] = normalized_model_contributions[l] / normalized_model_contributions[l].sum(dim=-1,keepdim=True)
+        elif scaling == 'softmax':
+            normalized_model_contributions[l] = F.softmax(model_contributions[l], dim=-1)
+        elif scaling == 't':
+            model_contributions[l] = 1/(1 + model_contributions[l])
+            normalized_model_contributions[l] =  model_contributions[l]/ model_contributions[l].sum(dim=-1,keepdim=True)
         else:
             print('No normalization selected!')
     return normalized_model_contributions
@@ -259,13 +323,20 @@ def spearmanr(x, y):
     return [coef]
 
 def get_normalized_rank(x):
-    """Compute normalized [0,1] ranks. The higher the value, the higher the rank."""
+    """Compute normalized [0,1] word importance ranks. The higher the value, the higher the rank."""
     
     length_tok_sentence = x.shape
     x = pd.Series(x)
     rank = x.rank(method='dense')
     rank_normalized = rank/length_tok_sentence
     return rank_normalized
+
+def get_rank(x):
+    """Compute word importance ranks. The higher the value, the higher the rank."""
+    length_tok_sentence = x.shape
+    x = pd.Series(x)
+    rank = x.rank(method='dense')
+    return rank
 
 def add_attributions_to_visualizer(attributions, tokens, pred, pred_ind, label, delta, vis_data_records):    
     # storing couple samples in an array for visualization purposes
@@ -322,7 +393,7 @@ def latex_colorize(text, weights):
     s = ''
     for w, x in zip(text, weights):
         w = w.replace('#','\#')
-        color = np.digitize(x, np.arange(0, 0.9, 0.1)) - 1
+        color = np.digitize(x, np.arange(0, 0.9, 0.2)) - 1
         s += ' ' + box.format(color_name.format(color), w)
     return s
 
@@ -331,7 +402,7 @@ def prepare_colorize():
 
     with open('latex_saliency/colorize.tex', 'w') as f:
         cmap = plt.cm.get_cmap('Blues')
-        for i, x in enumerate(np.arange(0, 0.9, 0.1)):
+        for i, x in enumerate(np.arange(0, 0.9, 0.2)):
             rgb = matplotlib.colors.rgb2hex(cmap(x)[:3])
             # convert to upper to circumvent xcolor bug
             rgb = rgb[1:].upper() if x > 0 else 'FFFFFF'
@@ -350,8 +421,8 @@ def figure_saliency(attributions_list, tokenized_text, methods_list, methods_dic
         # We need to replace RoBERTa's special character
         words_weights.append((tokenized_text[i].replace('\u0120',''), element.item()) for i, element in enumerate(attr))
     
-    
     with open('latex_saliency/figure.tex', 'w') as f:
+        
         for i, ww in enumerate(words_weights):
             method_latex = methods_dict[methods_list[i]]
             f.write('''\multicolumn{1}{l}{''' + method_latex + '''}\\\ \n''')

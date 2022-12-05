@@ -4,7 +4,7 @@
 ## Abstract
 <p>
 <em>
-The Transformer architecture aggregates input information through the self-attention mechanism, but there is no clear understanding of how this information is mixed across the entire model. Additionally, recent works have demonstrated that attention weights alone are not enough to describe the flow of information. In this paper, we consider the whole attention block --multi-head attention, residual connection, and layer normalization-- and define a metric to measure token-to-token interactions within each layer, considering the characteristics of the representation space. Then, we aggregate layer-wise interpretations to provide input attribution scores for model predictions. Experimentally, we show that our method, ALTI (Aggregation of Layer-wise Token-to-token Interactions), provides faithful explanations and outperforms similar aggregation methods.
+The Transformer architecture aggregates input information through the self-attention mechanism, but there is no clear understanding of how this information is mixed across the entire model. Additionally, recent works have demonstrated that attention weights alone are not enough to describe the flow of information. In this paper, we consider the whole attention block --multi-head attention, residual connection, and layer normalization-- and define a metric to measure token-to-token interactions within each layer. Then, we aggregate layer-wise interpretations to provide input attribution scores for model predictions. Experimentally, we show that our method, ALTI (Aggregation of Layer-wise Token-to-token Interactions), provides more faithful explanations and increased robustness than gradient-based methods.
 </em>
 </p>
 
@@ -25,9 +25,17 @@ conda env create -f ./environment.yml && \
 conda activate alti
 ```
 
+### Text Classification
+To analyze model predictions with the proposed (and others) intepretability methods in SST2 dataset:
+```bash
+Text_classification.ipynb
+```
+
 ## Usage with Transformers
 
-In our paper we use BERT, DistilBERT and RoBERTa models from Huggingface's [transformers](https://github.com/huggingface/transformers "Huggingface's transformers github") library, but it can be easily extended to other models.
+In our paper we use BERT, DistilBERT and RoBERTa models from Huggingface's [transformers](https://github.com/huggingface/transformers "Huggingface's transformers github") library.
+
+It can be easily extended to other encoder-based Transformers, just add the necessary layers' names in the configuration file: `./src/config.yaml`.
 
 We compare our method with:
 - Attention Rollout ([Abnar and Zuidema., 2020](https://arxiv.org/pdf/2005.00928.pdf))
@@ -36,30 +44,23 @@ We compare our method with:
 
 We use [Captum](https://captum.ai/) implementation of gradient-based methods.
 
-First, get the attributions obtained by each method for the specified model and dataset:
+The attributions obtained by each method for the specified model and dataset run:
 ```bash
 python ./attributions.py \
-  -model bert \         # model: bert/distilbert/roberta
-  -dataset sst2 \       # dataset to use: sst2/sva
-  -samples 500 \        # number of samples
+  -model $model_name \         # model: bert/distilbert/roberta
+  -dataset $dataset \       # dataset to use: sst2/IMDB/Yelp/sva
+  -samples $num_samples \       # number of samples
 ```
-To reproduce Table 2, Figure 6 and 7, run the following command:
+The metrics in  Table 2, Figure 6 and 7, run the following command:
 
 ```bash
-python ./correlations.py \
-  -model bert \         # model: bert/distilbert/roberta
-  -dataset sst2 \       # dataset to use: sst2/sva
+python aupc.py  --model $model_name \ # model: bert/distilbert/roberta
+                --dataset $dataset \ # dataset to use: sst2/IMDB/Yelp/sva
+                --samples $num_samples \ # number of samples
+                --fidelity-type $faith_metric \ # fidelity metric: comp/suff
+                --bins \ # use bins (1%,5%,10%,20%,50%) or one-by-one token deletion
 ```
-### Text Classification
-To analyze model predictions with the proposed (and others) intepretability methods in SST2 dataset:
-```bash
-Text_classification.ipynb
-```
-### Subject-verb Agreement
-To analyze model predictions with the proposed (and others) intepretability methods in Subject-Verb Agreement dataset:
-```bash
-SVA.ipynb
-```
+
 ## Citation
 If you use ALTI in your work, please consider citing:
 
