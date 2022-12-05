@@ -16,7 +16,7 @@ export PYTHONUNBUFFERED=TRUE
 export MODELS_DIR=/home/usuaris/scratch/javier.ferrando/checkpoints/
 
 
-source activate attn_flow
+source activate alti
 
 #mkdir -p $MODELS_DIR/multiberts
 dataset=yelp

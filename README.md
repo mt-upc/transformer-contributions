@@ -51,8 +51,7 @@ python ./attributions.py \
   -dataset $dataset \       # dataset to use: sst2/IMDB/Yelp/sva
   -samples $num_samples \       # number of samples
 ```
-The metrics in  Table 2, Figure 6 and 7, run the following command:
-
+The results in  Table 2 can be obtained by running the following command:
 ```bash
 python aupc.py  --model $model_name \ # model: bert/distilbert/roberta
                 --dataset $dataset \ # dataset to use: sst2/IMDB/Yelp/sva
@@ -60,6 +59,8 @@ python aupc.py  --model $model_name \ # model: bert/distilbert/roberta
                 --fidelity-type $faith_metric \ # fidelity metric: comp/suff
                 --bins \ # use bins (1%,5%,10%,20%,50%) or one-by-one token deletion
 ```
+
+Please use `$MODELS_DIR` to store fine-tuned models.
 
 ## Citation
 If you use ALTI in your work, please consider citing:
