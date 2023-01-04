@@ -113,13 +113,10 @@ class ModelWrapper(nn.Module):
         model_importance_list2 = []
         transformed_vectors_norm_list2 = []
         transformed_vectors_list2 = []
-        model_importance_list3 = []
         resultants_list2 = []
         contributions_data = {}
 
-        ###
         model_importance_list_l2 = []
-        ###
 
         try:
             num_layers = self.model.config.n_layers
@@ -153,14 +150,17 @@ class ModelWrapper(nn.Module):
             dense_bias = dense.bias
             dense = dense.weight.view(self.all_head_size, self.num_attention_heads, self.attention_head_size)
             transformed_layer = torch.einsum('bhsv,dhv->bhsd', value_layer, dense) #(batch, num_heads, seq_length, all_head_size)
+            del dense
 
             # AVW_O
             # (batch, num_heads, seq_length, seq_length, all_head_size)
             weighted_layer = torch.einsum('bhks,bhsd->bhksd', attention_probs, transformed_layer)
+            del transformed_layer
             
             # Sum each weighted vectors αf(x) over all heads:
             # (batch, seq_length, seq_length, all_head_size)
             summed_weighted_layer = weighted_layer.sum(dim=1) # sum over heads
+            del weighted_layer
 
             # Make residual matrix (batch, seq_length, seq_length, all_head_size)
             hidden_shape = hidden_states.size()
