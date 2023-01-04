@@ -89,7 +89,7 @@ class ModelWrapper(nn.Module):
                 'ln1': ln1,
                 'ln2': ln2}
 
-
+    @torch.no_grad()
     def get_contributions(self, hidden_states_model, attentions, func_inputs, func_outputs):
         #   hidden_states_model: Representations from previous layer and inputs to self-attention. (batch, seq_length, all_head_size)
         #   attentions: Attention weights calculated in self-attention. (batch, num_heads, seq_length, seq_length)
@@ -169,7 +169,8 @@ class ModelWrapper(nn.Module):
 
             # AVW_O + residual vectors -> (batch,seq_len,seq_len,embed_dim)
             residual_weighted_layer = summed_weighted_layer + residual
-
+            
+            @torch.no_grad()
             def l_transform(x, w_ln):
                 '''Computes mean and performs hadamard product with ln weight (w_ln) as a linear transformation.'''
                 ln_param_transf = torch.diag(w_ln)
