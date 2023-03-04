@@ -203,7 +203,7 @@ class ModelWrapper(nn.Module):
                 # Lb_O
                 dense_bias_term = l_transform(dense_bias, ln1_weight)
                 # y_i
-                ln_std_coef = 1/(pre_ln_states + ln1_eps).std(-1).view(1, -1, 1)
+                ln_std_coef = 1/(pre_ln_states + ln1_eps).std(-1, unbiased=False).view(1, -1, 1)
                 resultant = (attn_output + dense_bias_term)*ln_std_coef + ln1_bias
                 transformed_vectors_std = l_transform(residual_weighted_layer, ln1_weight)*ln_std_coef.unsqueeze(-1)
                 real_resultant = post_ln_states
@@ -237,7 +237,7 @@ class ModelWrapper(nn.Module):
             ln2_eps = ln2.eps
             ln2_bias = ln2.bias
 
-            ln2_std_coef = 1/(pre_ln2_states + ln2_eps).std(-1).view(1, -1, 1) # (batch,seq_len,1)
+            ln2_std_coef = 1/(pre_ln2_states + ln2_eps).std(-1, unbiased=False).view(1, -1, 1) # (batch,seq_len,1)
             transformed_vectors_std2 = l_transform(transformed_vectors_std, ln2_weight)*ln2_std_coef.unsqueeze(-1)
             resultant2 = post_LayerNorm_FFN
 
