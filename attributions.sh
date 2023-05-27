@@ -19,35 +19,39 @@ source activate attn_flow
 dataset=sst2
 num_samples=1000
 bert_seed=0
-model_name=multiberts-seed_$bert_seed
-model_name=bert
+END=10
 
-python attributions.py  --model $model_name \
-                        --dataset $dataset \
-                        --samples $num_samples
-for faith_metric in comp suff; do
-    if [ $dataset = imdb ] || [  $dataset = yelp ]
-    then
-        max_skip=60
-    else
-        max_skip=30
-    fi
-    for i in {1..2}; do
-    if [[ "$i" == '1' ]]
-    then
-        echo $max_skip
-        python aupc.py  --model $model_name \
-                    --dataset $dataset \
-                    --samples $num_samples \
-                    --fidelity-type $faith_metric \
-                    --bins \
-                    --max-skip $max_skip
-    else
-        python aupc.py  --model $model_name \
-                    --dataset $dataset \
-                    --samples $num_samples \
-                    --fidelity-type $faith_metric \
-                    --max-skip $max_skip
-    fi
-    done
+for bert_seed in $(seq 0 $END); do
+    echo $bert_seed
+    model_name=multiberts-seed_$bert_seed
+
+    python attributions.py  --model $model_name \
+                            --dataset $dataset \
+                            --samples $num_samples
 done
+# for faith_metric in comp suff; do
+#     if [ $dataset = imdb ] || [  $dataset = yelp ]
+#     then
+#         max_skip=60
+#     else
+#         max_skip=30
+#     fi
+#     for i in {1..2}; do
+#     if [[ "$i" == '1' ]]
+#     then
+#         echo $max_skip
+#         python aupc.py  --model $model_name \
+#                     --dataset $dataset \
+#                     --samples $num_samples \
+#                     --fidelity-type $faith_metric \
+#                     --bins \
+#                     --max-skip $max_skip
+#     else
+#         python aupc.py  --model $model_name \
+#                     --dataset $dataset \
+#                     --samples $num_samples \
+#                     --fidelity-type $faith_metric \
+#                     --max-skip $max_skip
+#     fi
+#     done
+# done
